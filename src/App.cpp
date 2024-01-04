@@ -451,7 +451,7 @@ bool App::OnInit()
     // メッシュをロード.
     {
         std::wstring path;
-        if (!SearchFilePath(L"res/teapot/ball1.obj", path))
+        if (!SearchFilePath(L"res/teapot/ball1.obj", path))//Hello
         { return false; }
 
         if (!LoadMesh(path.c_str(), m_Meshes, m_Materials))
