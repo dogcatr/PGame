@@ -135,12 +135,14 @@
   <ItemGroup>
     <ClCompile Include="..\src\App.cpp" />
     <ClCompile Include="..\src\FileUtil.cpp" />
+    <ClCompile Include="..\src\GameUpdate.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\Mesh.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\App.h" />
     <ClInclude Include="..\include\FileUtil.h" />
+    <ClInclude Include="..\include\GameUpdate.h" />
     <ClInclude Include="..\include\Mesh.h" />
   </ItemGroup>
   <ItemGroup>

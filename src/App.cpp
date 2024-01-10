@@ -13,6 +13,9 @@
 #include "FileUtil.h"
 #include <cassert>
 
+#include "windows.h"
+
+int WheelDelta = 0;
 
 namespace /* anonymous */ {
 
@@ -37,6 +40,10 @@ App::App(uint32_t width, uint32_t height)
 , m_Width           (width)
 , m_Height          (height)
 , m_FrameIndex      (0)
+, m_CharaA(width,height)
+, m_CharaB(width,height)
+, m_CharaC(width,height)
+, m_Target(width,height)
 {
     for(auto i=0u; i<FrameCount; ++i)
     {
@@ -118,6 +125,8 @@ bool App::InitWnd()
     wc.lpszMenuName     = nullptr;
     wc.lpszClassName    = ClassName;
     wc.hIconSm          = LoadIcon( hInst, IDI_APPLICATION );
+
+    //wc.hInstance = hInst;
 
     // ウィンドウの登録.
     if ( !RegisterClassEx(&wc) )
@@ -448,132 +457,8 @@ void App::TermD3D()
 //-----------------------------------------------------------------------------
 bool App::OnInit()
 {
-    // メッシュをロード.
-    {
-        std::wstring path;
-        if (!SearchFilePath(L"res/teapot/ball1.obj", path))//Hello
-        { return false; }
-
-        if (!LoadMesh(path.c_str(), m_Meshes, m_Materials))
-        { return false; }
-
-        // このサンプルでは，メッシュが1つのみとします.
-        assert(m_Meshes.size() == 1);
-    }
-
-    // 頂点バッファの生成.
-    {
-        auto size     = sizeof(MeshVertex) * m_Meshes[0].Vertices.size();
-        auto vertices = m_Meshes[0].Vertices.data();
-
-        // ヒーププロパティ.
-        D3D12_HEAP_PROPERTIES prop = {};
-        prop.Type                   = D3D12_HEAP_TYPE_UPLOAD;
-        prop.CPUPageProperty        = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-        prop.MemoryPoolPreference   = D3D12_MEMORY_POOL_UNKNOWN;
-        prop.CreationNodeMask       = 1;
-        prop.VisibleNodeMask        = 1;
-
-        // リソースの設定.
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Alignment          = 0;
-        desc.Width              = size;
-        desc.Height             = 1;
-        desc.DepthOrArraySize   = 1;
-        desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_UNKNOWN;
-        desc.SampleDesc.Count   = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
-
-        // リソースを生成.
-        auto hr = m_pDevice->CreateCommittedResource(
-            &prop,
-            D3D12_HEAP_FLAG_NONE,
-            &desc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(m_pVB.GetAddressOf()));
-        if ( FAILED(hr) )
-        { return false; }
-
-        // マッピングする.
-        void* ptr = nullptr;
-        hr = m_pVB->Map( 0, nullptr, &ptr );
-        if ( FAILED(hr) )
-        { return false; }
-
-        // 頂点データをマッピング先に設定.
-        memcpy(ptr, vertices, size);
-
-        // マッピング解除.
-        m_pVB->Unmap( 0, nullptr );
-
-        // 頂点バッファビューの設定.
-        m_VBV.BufferLocation = m_pVB->GetGPUVirtualAddress();
-        m_VBV.SizeInBytes    = static_cast<UINT>(size);
-        m_VBV.StrideInBytes  = static_cast<UINT>(sizeof(MeshVertex));
-    }
-
-    // インデックスバッファの生成.
-    {
-        auto size    = sizeof(uint32_t) * m_Meshes[0].Indices.size();
-        auto indices = m_Meshes[0].Indices.data();
-
-        // ヒーププロパティ.
-        D3D12_HEAP_PROPERTIES prop = {};
-        prop.Type                   = D3D12_HEAP_TYPE_UPLOAD;
-        prop.CPUPageProperty        = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-        prop.MemoryPoolPreference   = D3D12_MEMORY_POOL_UNKNOWN;
-        prop.CreationNodeMask       = 1;
-        prop.VisibleNodeMask        = 1;
-
-        // リソースの設定.
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Alignment          = 0;
-        desc.Width              = size;
-        desc.Height             = 1;
-        desc.DepthOrArraySize   = 1;
-        desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_UNKNOWN;
-        desc.SampleDesc.Count   = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
-
-        // リソースを生成.
-        auto hr = m_pDevice->CreateCommittedResource(
-            &prop,
-            D3D12_HEAP_FLAG_NONE,
-            &desc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS(m_pIB.GetAddressOf()));
-        if ( FAILED(hr) )
-        { return false; }
-
-        // マッピングする.
-        void* ptr = nullptr;
-        hr = m_pIB->Map( 0, nullptr, &ptr );
-        if ( FAILED(hr) )
-        { return false; }
-
-        // インデックスデータをマッピング先に設定.
-        memcpy(ptr, indices, size);
-
-        // マッピング解除.
-        m_pIB->Unmap( 0, nullptr );
-
-        // インデックスバッファビューの設定.
-        m_IBV.BufferLocation = m_pIB->GetGPUVirtualAddress();
-        m_IBV.Format         = DXGI_FORMAT_R32_UINT;
-        m_IBV.SizeInBytes    = static_cast<UINT>(size);
-    }
-
-    // 定数バッファ用ディスクリプタヒープの生成.
+    //
+    //削除しない
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
         desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -585,81 +470,38 @@ bool App::OnInit()
         if ( FAILED(hr) )
         { return false; }
     }
+    //削除しない
+    //
+    m_CharaA.pos_x = 3.0f;
+    m_CharaC.pos_y = -1.01f;//plane
+    m_Target.pos_y = -1.0f;
 
-    // 定数バッファの生成.
-    {
-        // ヒーププロパティ.
-        D3D12_HEAP_PROPERTIES prop = {};
-        prop.Type                   = D3D12_HEAP_TYPE_UPLOAD;
-        prop.CPUPageProperty        = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-        prop.MemoryPoolPreference   = D3D12_MEMORY_POOL_UNKNOWN;
-        prop.CreationNodeMask       = 1;
-        prop.VisibleNodeMask        = 1;
+    m_CharaA.setPos();
+    m_CharaB.setPos();
+    m_CharaC.setPos();
+    m_Target.setPos();
 
-        // リソースの設定.
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension          = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Alignment          = 0;
-        desc.Width              = sizeof(Transform);
-        desc.Height             = 1;
-        desc.DepthOrArraySize   = 1;
-        desc.MipLevels          = 1;
-        desc.Format             = DXGI_FORMAT_UNKNOWN;
-        desc.SampleDesc.Count   = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.Layout             = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        desc.Flags              = D3D12_RESOURCE_FLAG_NONE;
+    setEP();//set eye position
+    m_CharaA.state.set(State::FLAGS::WALK);//set character state
+    m_CharaB.state.set(State::FLAGS::WALK);
+    m_CharaC.state.set(State::FLAGS::WALK);
+    m_Target.state.set(State::FLAGS::WALK);
 
-        auto incrementSize = m_pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    m_CharaA.init(m_pDevice, m_pHeapCBV, L"res/teapot/monkey.obj");
+    m_CharaB.init(m_pDevice, m_pHeapCBV, L"res/teapot/monkey.obj");
+    m_CharaC.init(m_pDevice, m_pHeapCBV, L"res/teapot/plane.obj");//plane
+    m_Target.init(m_pDevice, m_pHeapCBV, L"res/teapot/target.obj");//target mark
 
-        for(auto i=0; i<FrameCount; ++i)
-        {
-            // リソース生成.
-            auto hr = m_pDevice->CreateCommittedResource( 
-                &prop,
-                D3D12_HEAP_FLAG_NONE,
-                &desc,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(m_pCB[i].GetAddressOf()));
-            if ( FAILED(hr) )
-            { return false; }
+    m_CharaA.initbb(m_pDevice, m_pHeapCBV, L"res/teapot/cube.obj");
+    m_CharaB.initbb(m_pDevice, m_pHeapCBV, L"res/teapot/cube.obj");
+    m_CharaC.initbb(m_pDevice, m_pHeapCBV, L"res/teapot/cube.obj");//plane
+    m_Target.initbb(m_pDevice, m_pHeapCBV, L"res/teapot/cube.obj");//
 
-            auto address   = m_pCB[i]->GetGPUVirtualAddress();
-            auto handleCPU = m_pHeapCBV->GetCPUDescriptorHandleForHeapStart();
-            auto handleGPU = m_pHeapCBV->GetGPUDescriptorHandleForHeapStart();
 
-            handleCPU.ptr += incrementSize * i;
-            handleGPU.ptr += incrementSize * i;
-
-            // 定数バッファビューの設定.
-            m_CBV[i].HandleCPU           = handleCPU;
-            m_CBV[i].HandleGPU           = handleGPU;
-            m_CBV[i].Desc.BufferLocation = address;
-            m_CBV[i].Desc.SizeInBytes    = sizeof(Transform);
-
-            // 定数バッファビューを生成.
-            m_pDevice->CreateConstantBufferView( &m_CBV[i].Desc, handleCPU );
-
-            // マッピング.
-            hr = m_pCB[i]->Map(0, nullptr, reinterpret_cast<void**>(&m_CBV[i].pBuffer));
-            if ( FAILED(hr) )
-            { return false; }
-
-            auto eyePos     = DirectX::XMVectorSet( 0.0f, 1.0f, 2.0f, 0.0f );
-            auto targetPos  = DirectX::XMVectorZero();
-            auto upward     = DirectX::XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f );
-
-            auto fovY   = DirectX::XMConvertToRadians( 37.5f );
-            auto aspect = static_cast<float>(m_Width) / static_cast<float>(m_Height);
-
-            // 変換行列の設定.
-            m_CBV[i].pBuffer->World = DirectX::XMMatrixIdentity();
-            m_CBV[i].pBuffer->View  = DirectX::XMMatrixLookAtRH( eyePos, targetPos, upward );
-            m_CBV[i].pBuffer->Proj  = DirectX::XMMatrixPerspectiveFovRH( fovY, aspect, 1.0f, 1000.0f );
-            m_CBV[i].pBuffer->LightPosition = DirectX::XMFLOAT3(0.0f, 100.0f, -100.0f);
-        }
-    }
+    /*DirectX::XMMATRIX myworld = { {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f} };
+    m_CharaB.chWld(myworld, 0);
+    m_CharaB.chWld(myworld, 1);*/
+    //初期化
 
     // ルートシグニチャの生成.
     {
@@ -751,12 +593,21 @@ bool App::OnInit()
 
         // レンダーターゲットのブレンド設定.
         D3D12_RENDER_TARGET_BLEND_DESC descRTBS = {
-            FALSE, FALSE,
+            TRUE, FALSE,
+            D3D12_BLEND_SRC_ALPHA, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_OP_ADD,
+            D3D12_BLEND_SRC_ALPHA, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_OP_ADD,
+            D3D12_LOGIC_OP_AND,
+            D3D12_COLOR_WRITE_ENABLE_ALL
+        };
+        /*D3D12_RENDER_TARGET_BLEND_DESC descRTBS = {
+            TRUE, FALSE,
             D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
             D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD,
             D3D12_LOGIC_OP_NOOP,
             D3D12_COLOR_WRITE_ENABLE_ALL
-        };
+        };*/
+        //noop invert
+        //one src_alpha, zero inv_src_alpha
 
         // ブレンドステートの設定.
         D3D12_BLEND_DESC descBS;
@@ -821,7 +672,8 @@ bool App::OnInit()
     {
         // ファイルパスを検索する.
         std::wstring texturePath;
-        if (!SearchFilePath(L"res/teapot/default.dds", texturePath))
+        //if (!SearchFilePath(L"res/teapot/default.dds", texturePath))
+        if (!SearchFilePath(L"res/teapot/lcat.dds", texturePath))
         { return false; }
 
         DirectX::ResourceUploadBatch batch(m_pDevice.Get());
@@ -854,7 +706,6 @@ bool App::OnInit()
 
         // テクスチャの構成設定を取得
         auto textureDesc = m_Texture.pResource->GetDesc();
-
         // シェーダリソースビューの設定.
         D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc = {};
         viewDesc.ViewDimension                  = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -956,29 +807,21 @@ void App::MainLoop()
 //-----------------------------------------------------------------------------
 //      描画処理です.
 //-----------------------------------------------------------------------------
+
 void App::Render()
 {
     // 更新処理.
-    {
-        m_RotateAngle += 0.025f;
-        m_CBV[m_FrameIndex].pBuffer->World = DirectX::XMMatrixRotationY( m_RotateAngle );
-        //chg1
-        m_LightRA += 0.01f;
-        m_CBV[m_FrameIndex].pBuffer->LightPosition = DirectX::XMFLOAT3(0.0f, 100.0f * sin(m_LightRA), 100.0f * cos(m_LightRA));
-        //chg1
-    }
-
     // コマンドの記録を開始.
     m_pCmdAllocator[m_FrameIndex]->Reset();
     m_pCmdList->Reset(m_pCmdAllocator[m_FrameIndex].Get(), nullptr);
 
     // リソースバリアの設定.
     D3D12_RESOURCE_BARRIER barrier = {};
-    barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barrier.Transition.pResource   = m_pColorBuffer[m_FrameIndex].Get();
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = m_pColorBuffer[m_FrameIndex].Get();
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     // リソースバリア.
@@ -996,23 +839,19 @@ void App::Render()
     // 深度ステンシルビューをクリア.
     m_pCmdList->ClearDepthStencilView(m_HandleDSV, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-    // 描画処理.
+    //command
     {
-        m_pCmdList->SetGraphicsRootSignature( m_pRootSignature.Get() );
-        m_pCmdList->SetDescriptorHeaps( 1, m_pHeapCBV.GetAddressOf() );
-        m_pCmdList->SetGraphicsRootConstantBufferView( 0, m_CBV[m_FrameIndex].Desc.BufferLocation );
-        m_pCmdList->SetGraphicsRootDescriptorTable( 1, m_Texture.HandleGPU );
-        m_pCmdList->SetPipelineState( m_pPSO.Get() );
+        m_pCmdList->SetGraphicsRootSignature(m_pRootSignature.Get());
+        m_pCmdList->SetDescriptorHeaps(1, m_pHeapCBV.GetAddressOf());
+        m_pCmdList->SetGraphicsRootDescriptorTable(1, m_Texture.HandleGPU);
+        m_pCmdList->SetPipelineState(m_pPSO.Get());
 
-        m_pCmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
-        m_pCmdList->IASetVertexBuffers( 0, 1, &m_VBV );
-        m_pCmdList->IASetIndexBuffer( &m_IBV );
-        m_pCmdList->RSSetViewports( 1, &m_Viewport );
-        m_pCmdList->RSSetScissorRects( 1, &m_Scissor );
-
-        auto count = static_cast<uint32_t>(m_Meshes[0].Indices.size());
-        m_pCmdList->DrawIndexedInstanced( count, 1, 0, 0, 0 );
+        m_pCmdList->RSSetViewports(1, &m_Viewport);
+        m_pCmdList->RSSetScissorRects(1, &m_Scissor);
     }
+
+    //キャラクター更新
+    updmatome();
 
     // リソースバリアの設定.
     barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1087,18 +926,75 @@ void App::WaitGpu()
 //-----------------------------------------------------------------------------
 //      ウィンドウプロシージャです.
 //-----------------------------------------------------------------------------
-LRESULT CALLBACK App::WndProc( HWND hWnd, UINT msg, WPARAM wp, LPARAM lp )
+LRESULT CALLBACK App::WndProc( HWND hWnd, UINT msg, WPARAM wparam, LPARAM lparam )
 {
     switch( msg )
     {
+        case WM_MOUSEWHEEL:
+            WheelDelta = GET_WHEEL_DELTA_WPARAM(wparam);
+            break;
         case WM_DESTROY:
             { PostQuitMessage( 0 ); }
             break;
-
         default:
-            { /* DO_NOTHING */ }
+            //WheelDelta = 0;
             break;
     }
 
-    return DefWindowProc( hWnd, msg, wp, lp );
+    return DefWindowProc( hWnd, msg, wparam, lparam );
+}
+
+void App::mousemove() {//マウスでキャラを動かす
+    
+    if (PeekMessage(&m_msg, NULL, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&m_msg);
+        DispatchMessage(&m_msg);
+    }
+    //std::cout << WheelDelta << std::endl;
+    WheelDelta = 0;
+
+    if (GetAsyncKeyState(VK_LBUTTON) & 0x8001) {//Left ClickならFLAGをLCLICKに
+        if (!state.is(MouseState::FLAGS::LCLICK | MouseState::FLAGS::HOLD)) {
+            state.set(MouseState::FLAGS::LCLICK);
+        }
+        else {
+            state.reset();
+            state.set(MouseState::FLAGS::HOLD);
+        }
+    }
+    else if (GetAsyncKeyState(VK_RBUTTON) & 0x8001) {//Right ClickならFLAGをRCLICKに
+        if (!state.is(MouseState::FLAGS::RCLICK | MouseState::FLAGS::HOLD)) {
+            state.set(MouseState::FLAGS::RCLICK);
+        }
+        else {
+            state.reset();
+            state.set(MouseState::FLAGS::HOLD);
+        }
+    }
+    else {
+        state.reset();
+    }
+
+    RECT rec;
+    POINT MousePoint;
+    GetWindowRect(m_hWnd, &rec);
+    //std::cout<< typeid((rec.left + rec.right) / 2).name() <<std::endl;
+    centerX = (rec.left + rec.right) / 2;
+    centerY = (rec.top + rec.bottom) / 2;
+    if (GetCursorPos(&MousePoint)) {
+        diffX = MousePoint.x - centerX;
+        diffY = -(MousePoint.y - centerY);
+        if (abs(diffX) + abs(diffY) > 30) {
+            m_CharaB.C_Angle = atan(diffY / diffX);
+            if (diffX < 0) {
+                m_CharaB.C_Angle += PI;
+            }
+            diffX = speed * cos(m_CharaB.C_Angle);
+            diffY = speed * sin(m_CharaB.C_Angle);
+            m_CharaB.pos_x += diffX;
+            pos_x += diffX;
+            m_CharaB.pos_z -= diffY;
+            pos_z -= diffY;
+        }
+    }
 }

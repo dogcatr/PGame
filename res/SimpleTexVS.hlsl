@@ -20,8 +20,10 @@ struct VSOutput
     float2  TexCoord : TEXCOORD;
     float3 Normal: NORMAL;
     float4 WorldPos: WORLD_POS;
-    //chg1
-    float3 LightPosition: LIGHT_POS;
+    
+    float3 LightPosition : LIGHT_POS;
+    float3 LightColor : LIGHT_COLOR;
+    float4 CameraPos : CAMERA_POS;
 };
 
 cbuffer Transform : register( b0 )
@@ -29,15 +31,17 @@ cbuffer Transform : register( b0 )
     float4x4 World : packoffset( c0 );
     float4x4 View  : packoffset( c4 );
     float4x4 Proj  : packoffset( c8 );
-    //chg1
-    float3 LightPosition : packoffset(c12);
+    
+    //float3 LightPosition : packoffset(c12);
+    //float3 LightColor : packoffset(c13);
+    float4x4 Light : packoffset(c12);
 }
 
 VSOutput main( VSInput input )
 {
     VSOutput output = (VSOutput)0;
 
-    float4 localPos = float4( input.Position, 3.0f );
+    float4 localPos = float4( input.Position, 1.0f );
     float4 worldPos = mul( World, localPos );
     float4 viewPos  = mul( View,  worldPos );
     float4 projPos  = mul( Proj,  viewPos );
@@ -46,10 +50,16 @@ VSOutput main( VSInput input )
     output.TexCoord = input.TexCoord;
     output.WorldPos = worldPos;
     output.Normal = normalize(mul((float3x3)World, input.Normal));
-
-    //chg1
-    output.LightPosition = LightPosition;
-    //chg1
+    
+    //output.LightPosition = LightPosition;
+    //output.LightColor = LightColor;
+    
+    //output.LightPosition = Light * unit_x();
+    //output.LightColor = Light * unit_y();
+    
+    output.LightPosition = (float3)mul(Light, float4(1.0f, 0.0f, 0.0f, 0.0f));
+    output.LightColor = (float3)mul(Light, float4(0.0f, 1.0f, 0.0f, 0.0f)); //4Ç3Ç…ÇµÇ»Ç≠ÇƒÇ¢Ç¢ÅH
+    output.CameraPos = mul(Light, float4(0.0f, 0.0f, 1.0f, 0.0f));
 
     return output;
 }

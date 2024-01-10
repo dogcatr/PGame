@@ -8,12 +8,14 @@
 
 struct VSOutput
 {
-    float4  Position : SV_POSITION;
-    float2  TexCoord : TEXCOORD;
-    float3 Normal: NORMAL;
-    float4 WorldPos: WORLD_POS;
+    float4 Position : SV_POSITION;
+    float2 TexCoord : TEXCOORD;
+    float3 Normal : NORMAL;
+    float4 WorldPos : WORLD_POS;
     //chg1
-    float3 LightPosition: LIGHT_POS;
+    float3 LightPosition : LIGHT_POS;
+    float3 LightColor : LIGHT_COLOR;
+    float4 CameraPos : CAMERA_POS;
 };
 
 struct PSOutput
@@ -30,34 +32,16 @@ Texture2D    ColorMap : register( t0 );
 PSOutput main(VSOutput input)
 {
     PSOutput output =(PSOutput)0;
-
-    //chg, or
-    //output.Color = ColorMap.Sample( ColorSmp, input.TexCoord );
-
-    //chg, lam
-    /*float3 LightPosition = { 0.0f, 50.0f, 100.0f };
-    float3 LightColor = { 1.0f, 1.0f, 1.0f };
-    float3 Diffuse = { 0.9f,0.9f,0.9f };
-    float Alpha = 0.9f;
-
-    float3 N = normalize(input.Normal);
-    float3 L = normalize(LightPosition-input.WorldPos.xyz);
-    float4 color = ColorMap.Sample(ColorSmp, input.TexCoord);
-    float3 diffuse = LightColor * Diffuse * saturate(dot(L, N));
-    output.Color = float4(color.rgb * diffuse, color.a * Alpha);*/
-
-    //chg, pho
-    //float3 LightPosition = { 0.0f, 100.0f, -100.0f };
-    //chg1
+    
     float3 LightPosition = input.LightPosition;
-    //chg1
-    float3 LightColor = { 1.0f, 1.0f, 1.0f };
+    float3 LightColor = input.LightColor;
     float3 Diffuse = { 0.9f,0.9f,0.9f };
-    float Alpha = 0.9f;//“§‰ß“x
+    float Alpha = 0.99f;//“§‰ß“x
     float3 Specular = { 0.6f,0.6f,0.6f };//‹¾–Ê”½ŽË—¦
     float Shininess = 100.0f;//‹¾–Ê”½ŽË‹­“x
 
-    float4 CameraPosition = { 0.0f, 1.0f, 2.0f, 0.0f };
+    //float4 CameraPosition = { 0.0f, 1.0f, 2.0f, 0.0f };
+    float4 CameraPosition = input.CameraPos;
 
     float3 N = normalize(input.Normal);
     float3 L = normalize(LightPosition - input.WorldPos.xyz);
@@ -65,7 +49,7 @@ PSOutput main(VSOutput input)
     float3 V = normalize(preV.xyz);
     float3 R = normalize(-reflect(V, N));
 
-    float4 color = ColorMap.Sample(ColorSmp, input.TexCoord);
+    float4 color = ColorMap.Sample(ColorSmp, frac(input.TexCoord * 5));
     float3 diffuse = LightColor * Diffuse * saturate(dot(L, N));
     float3 specular = LightColor * Specular * pow(saturate(dot(L, R)), Shininess);
 
